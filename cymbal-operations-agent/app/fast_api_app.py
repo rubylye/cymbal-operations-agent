@@ -23,10 +23,12 @@ from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.runners import Runner
 from google.cloud import logging as google_cloud_logging
+from starlette.responses import Response, StreamingResponse
 
 from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
 from app.app_utils.typing import Feedback
+from app.utils.pii_masking import mask_pii_text
 
 load_dotenv()
 try:
@@ -81,8 +83,14 @@ app.description = "API for interacting with the Agent cymbal-operations-agent"
 
 @app.middleware("http")
 async def enforce_oidc_tenant_session_isolation(request, call_next):
-    """Enforces multi-user tenant session isolation by validating X-Goog-Authenticated-User-Email if present."""
-    user_email_header = request.headers.get("X-Goog-Authenticated-User-Email")
+    """Enforces multi-user tenant session isolation by binding authenticated OIDC user emails to session context."""
+    user_email_header = (
+        request.headers.get("X-Goog-Authenticated-User-Email")
+        or request.headers.get("X-Authenticated-User")
+        or request.headers.get("X-User-Email")
+    )
+
+    user_identity = "default_user"
     if user_email_header:
         # Accounts payload from Google Cloud IAP/OIDC format: accounts.google.com:user@domain.com
         user_identity = (
@@ -90,7 +98,9 @@ async def enforce_oidc_tenant_session_isolation(request, call_next):
             if ":" in user_email_header
             else user_email_header
         )
-        request.state.authenticated_user = user_identity
+    request.state.authenticated_user = user_identity
+    request.scope["authenticated_user_id"] = user_identity
+
     return await call_next(request)
 
 

@@ -23,6 +23,8 @@ from google.adk.tools.data_agent.config import DataAgentToolConfig
 from google.adk.tools.data_agent.data_agent_tool import ask_data_agent
 from google.auth.transport.requests import Request
 
+from app.utils.pii_masking import mask_pii_data, mask_pii_text
+
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
 DATA_AGENT_ID = os.getenv("BIGQUERY_DATA_AGENT_ID", "")
@@ -69,7 +71,6 @@ def cymbal_analytics_tool(query: str) -> str:
 
     max_retries = 3
     backoff_factor = 2.0
-    last_error = None
     settings = DataAgentToolConfig()
 
     for attempt in range(1, max_retries + 1):
@@ -117,26 +118,29 @@ def cymbal_analytics_tool(query: str) -> str:
 
                 output = []
                 if final_parts:
-                    output.append("\n".join(final_parts))
+                    output.append(mask_pii_text("\n".join(final_parts)))
                 if data_results:
                     output.append(
                         f"\nData Results ({len(data_results)} records):\n"
-                        + json.dumps(data_results[:20], indent=2)
+                        + json.dumps(mask_pii_data(data_results[:20]), indent=2)
                     )
                 if generated_sql:
                     output.append(f"\nGenerated SQL Query:\n{generated_sql}")
 
                 if output:
                     return "\n\n".join(output)
-                return json.dumps(response_steps, indent=2)
+                return json.dumps(mask_pii_data(response_steps), indent=2)
 
-            last_error = result.get("error_details", json.dumps(result))
-        except Exception as e:
-            last_error = str(e)
+        except Exception:
+            pass
 
         if attempt < max_retries:
             time.sleep(backoff_factor**attempt)
 
-    return (
-        f"Store analytical data is temporarily unreachable. Error details: {last_error}"
+    return json.dumps(
+        {
+            "status": "ERROR",
+            "message": "Regional analytical data is temporarily unreachable",
+        },
+        indent=2,
     )

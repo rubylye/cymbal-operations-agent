@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Cloud Bigtable Real-Time Metrics Tool (read_cashier_realtime_metrics) with MCP Toolbox integration."""
+"""Cloud Bigtable Declarative SQL & Real-Time Metrics Tools with MCP Toolbox Gateway."""
 
 import json
 import os
@@ -28,6 +28,8 @@ from google.cloud import bigtable
 from google.cloud.bigtable.row_set import RowSet
 from google.oauth2 import id_token
 
+from app.utils.pii_masking import mask_pii_data
+
 load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
     override=True,
@@ -39,8 +41,8 @@ TABLE_NAME = os.getenv("BIGTABLE_TABLE", "cashier_realtime_alerts")
 BIGTABLE_MCP_URL = os.getenv("BIGTABLE_MCP_URL", "")
 
 
-def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> str | None:
-    """Attempts to query the Cloud Run Bigtable MCP microservice executing declarative SQL/Toolbox queries."""
+def _query_via_mcp_toolbox(tool_name: str, arguments: dict[str, Any]) -> str | None:
+    """Attempts to query the Cloud Run Bigtable MCP microservice executing declarative GoogleSQL tools."""
     if not BIGTABLE_MCP_URL:
         return None
     try:
@@ -51,14 +53,11 @@ def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> str | None:
             "Content-Type": "application/json",
         }
         payload = {
-            "name": "read_cashier_realtime_metrics",
-            "arguments": {
-                "store_id": store_id,
-                "cashier_id": cashier_id,
-            },
+            "name": tool_name,
+            "arguments": arguments,
         }
         resp = requests.post(
-            f"{BIGTABLE_MCP_URL.rstrip('/')}/tools/read_cashier_realtime_metrics/invoke",
+            f"{BIGTABLE_MCP_URL.rstrip('/')}/tools/{tool_name}/invoke",
             headers=headers,
             json=payload,
             timeout=10,
@@ -66,15 +65,15 @@ def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> str | None:
         if resp.status_code == 200:
             data = resp.json()
             if isinstance(data, dict) and "result" in data:
-                return str(data["result"])
-            return json.dumps(data, indent=2)
+                return str(mask_pii_data(data["result"]))
+            return json.dumps(mask_pii_data(data), indent=2)
     except Exception:
         pass
     return None
 
 
-def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
-    """Queries Cloud Bigtable operations-db for real-time 1-hour rolling metrics and audit status flags for a cashier.
+def read_cashier_realtime_alerts_sql(store_id: str, cashier_id: str) -> str:
+    """Executes declarative GoogleSQL over Bigtable instance operations-db to query real-time 1-hour rolling metrics and cashier anomaly alerts.
 
     Use this tool when users ask for:
     - Real-time / live cashier metrics (1-hour rolling override rate, promo rate, transaction count)
@@ -86,7 +85,7 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
         cashier_id: Cashier identifier, formatted as 'CASH_1190' or '1190'.
 
     Returns:
-        A structured JSON/markdown string detailing the most recent 1-hour rolling metrics,
+        A structured JSON string detailing the most recent 1-hour rolling metrics,
         audit status, risk score, and transaction statistics.
     """
     # Normalize store_id (e.g. 48 -> STORE_048, STORE_48 -> STORE_048)
@@ -104,17 +103,22 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
         norm_cash = str(cashier_id).strip()
 
     # Step 1: Attempt Centralized MCP Microservice Call
-    mcp_result = _query_via_mcp_toolbox(norm_store, norm_cash)
+    mcp_result = _query_via_mcp_toolbox(
+        "read_cashier_realtime_alerts_sql",
+        {"store_id": norm_store, "cashier_id": norm_cash},
+    )
+    if not mcp_result:
+        mcp_result = _query_via_mcp_toolbox(
+            "read_cashier_realtime_metrics",
+            {"store_id": norm_store, "cashier_id": norm_cash},
+        )
     if mcp_result:
         return mcp_result
 
-    # Step 2: Resilient Local SDK Execution
-
+    # Step 2: Resilient Local Execution
     row_prefix = f"{norm_store}#{norm_cash}#"
-
     max_retries = 3
     backoff_factor = 2.0
-    last_error = None
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -123,16 +127,21 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
             table = instance.table(TABLE_NAME)
 
             row_set = RowSet()
-            row_set.add_row_range_from_keys(
-                start_key=row_prefix.encode("utf-8"),
-                end_key=(f"{norm_store}#{norm_cash}$\xff").encode(),
-            )
+            row_set.add_row_range_from_prefix(row_prefix.encode("utf-8"))
 
-            rows = list(table.read_rows(row_set=row_set, limit=1))
+            rows = list(table.read_rows(row_set=row_set, limit=10))
+
             if not rows:
-                return (
-                    f"No real-time alert or metric records found in Bigtable table `{TABLE_NAME}` "
-                    f"for {norm_cash} at {norm_store} (prefix: {row_prefix})."
+                return json.dumps(
+                    {
+                        "store_id": norm_store,
+                        "cashier_id": norm_cash,
+                        "temporal_scope": "live_rolling_1h",
+                        "valid_for_minutes": 60,
+                        "status": "NO_ALERTS",
+                        "message": f"No active live 1-hour cashier alerts found for {norm_cash} at {norm_store} (prefix: {row_prefix}).",
+                    },
+                    indent=2,
                 )
 
             latest_row = rows[0]
@@ -141,6 +150,8 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
                 "store_id": norm_store,
                 "cashier_id": norm_cash,
                 "latest_row_key": row_key_str,
+                "temporal_scope": "live_rolling_1h",
+                "valid_for_minutes": 60,
             }
 
             for _cf, cols in latest_row.cells.items():
@@ -161,40 +172,130 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
                         except Exception:
                             pass
 
-                    # Decode string or float fields
-                    str_val = val_bytes.decode("utf-8", errors="ignore")
+                    # Decode string / float / bool fields
                     try:
-                        if "." in str_val or "e" in str_val.lower():
-                            metrics[col_name] = float(str_val)
-                        else:
-                            metrics[col_name] = int(str_val)
-                    except ValueError:
-                        metrics[col_name] = str_val
+                        str_val = val_bytes.decode("utf-8")
+                        try:
+                            if "." in str_val:
+                                metrics[col_name] = float(str_val)
+                            elif str_val.isdigit() or (
+                                str_val.startswith("-") and str_val[1:].isdigit()
+                            ):
+                                metrics[col_name] = int(str_val)
+                            elif str_val.lower() in ("true", "false"):
+                                metrics[col_name] = str_val.lower() == "true"
+                            else:
+                                metrics[col_name] = str_val
+                        except ValueError:
+                            metrics[col_name] = str_val
+                    except UnicodeDecodeError:
+                        metrics[col_name] = f"0x{val_bytes.hex()}"
 
-            # Compute manual override rate if count and txn_count are present
+            # Compute derived ratios if missing
             txn_count = metrics.get("cashier_1h_txn_count", 0)
-            override_cnt = metrics.get("cashier_1h_manual_override_count", 0)
-            if txn_count and txn_count > 0:
-                override_rate = round(override_cnt / txn_count, 4)
-            else:
-                override_rate = 0.0
-            metrics["cashier_1h_manual_override_rate"] = override_rate
+            if (
+                isinstance(txn_count, (int, float))
+                and txn_count > 0
+                and "cashier_1h_override_rate" not in metrics
+            ):
+                ovr = metrics.get("cashier_1h_manual_override_count", 0)
+                metrics["cashier_1h_override_rate"] = round(
+                    float(ovr) / float(txn_count), 4
+                )
 
-            return (
-                f"### Real-Time Cashier Metrics (Cloud Bigtable: {INSTANCE_ID}.{TABLE_NAME})\n\n"
-                f"- **Store:** {metrics['store_id']}\n"
-                f"- **Cashier ID:** {metrics['cashier_id']}\n"
-                f"- **Audit Status Flag:** `{metrics.get('audit_status', 'unknown')}`\n"
-                f"- **Real-Time Risk Score:** {metrics.get('risk_score', 0.0)}\n"
-                f"- **Live 1-Hour Rolling Override Rate:** {metrics.get('cashier_1h_manual_override_rate', 0.0):.2%} ({override_cnt}/{txn_count})\n"
-                f"- **Live 1-Hour Rolling Promo Rate:** {float(metrics.get('cashier_1h_promo_rate', 0.0)):.2%} ({metrics.get('cashier_1h_promo_count', 0)} promos)\n"
-                f"- **Live 1-Hour Total Discount (USD):** ${metrics.get('cashier_1h_total_discount_usd', '0.00')}\n"
-                f"- **Last Event Timestamp:** {metrics.get('last_event_ts', 'N/A')}\n\n"
-                f"```json\n{json.dumps(metrics, indent=2)}\n```"
-            )
-        except Exception as e:
-            last_error = str(e)
+            if (
+                isinstance(txn_count, (int, float))
+                and txn_count > 0
+                and "cashier_1h_promo_rate" not in metrics
+            ):
+                prm = metrics.get("cashier_1h_promo_count", 0)
+                metrics["cashier_1h_promo_rate"] = round(
+                    float(prm) / float(txn_count), 4
+                )
+
+            return json.dumps(mask_pii_data(metrics), indent=2)
+
+        except Exception:
             if attempt < max_retries:
                 time.sleep(backoff_factor**attempt)
 
-    return f"Cloud Bigtable telemetry service unreachable. Error details: {last_error}"
+    return json.dumps(
+        {
+            "status": "ERROR",
+            "message": "Regional operational telemetry is temporarily unreachable",
+        },
+        indent=2,
+    )
+
+
+def read_pos_transactions_enriched_sql(
+    store_id: str, transaction_id: str = "", limit_count: int = 10
+) -> str:
+    """Executes declarative GoogleSQL over Bigtable instance operations-db to query enriched sub-second POS checkout transactions with PII masking.
+
+    Args:
+        store_id: Store identifier (e.g. STORE_048 or 48).
+        transaction_id: Optional POS transaction ID to look up.
+        limit_count: Maximum number of records to return (default: 10).
+
+    Returns:
+        A structured JSON string with enriched transaction details, masking customer payment card numbers.
+    """
+    store_num = re.findall(r"\d+", str(store_id))
+    norm_store = (
+        f"STORE_{int(store_num[0]):03d}" if store_num else str(store_id).strip()
+    )
+
+    # Step 1: Attempt Centralized MCP Microservice Call
+    mcp_result = _query_via_mcp_toolbox(
+        "read_pos_transactions_enriched_sql",
+        {
+            "store_id": norm_store,
+            "transaction_id": transaction_id,
+            "limit_count": limit_count,
+        },
+    )
+    if mcp_result:
+        return mcp_result
+
+    # Step 2: Resilient Local Execution
+    prefix = f"{norm_store}#{transaction_id}" if transaction_id else f"{norm_store}#"
+    try:
+        client = bigtable.Client(project=PROJECT_ID, admin=False)
+        instance = client.instance(INSTANCE_ID)
+        table = instance.table("pos_transactions_enriched")
+
+        row_set = RowSet()
+        row_set.add_row_range_from_prefix(prefix.encode("utf-8"))
+        rows = list(table.read_rows(row_set=row_set, limit=limit_count))
+
+        results = []
+        for r in rows:
+            record: dict[str, Any] = {"row_key": r.row_key.decode("utf-8")}
+            for _cf, cols in r.cells.items():
+                for c_name, c_list in cols.items():
+                    col = c_name.decode("utf-8")
+                    val = c_list[0].value.decode("utf-8", errors="ignore")
+                    record[col] = val
+            results.append(mask_pii_data(record))
+
+        return json.dumps(
+            {
+                "store_id": norm_store,
+                "record_count": len(results),
+                "transactions": results,
+            },
+            indent=2,
+        )
+    except Exception:
+        return json.dumps(
+            {
+                "status": "ERROR",
+                "message": "Regional operational telemetry is temporarily unreachable",
+            },
+            indent=2,
+        )
+
+
+# Backward-compatible alias for existing imports
+read_cashier_realtime_metrics = read_cashier_realtime_alerts_sql

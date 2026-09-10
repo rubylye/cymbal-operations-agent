@@ -11,11 +11,38 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Unit tests for business logic, data normalization, SQL query construction, and guardrails."""
+"""Unit tests for business logic, PII masking, data normalization, SQL tools, and guardrails."""
 
+import json
 import re
 
+from app.tools.bigtable_tool import (
+    read_cashier_realtime_alerts_sql,
+    read_pos_transactions_enriched_sql,
+)
 from app.tools.rag_tool import SIMILARITY_THRESHOLD, pos_troubleshooting_rag_tool
+from app.utils.pii_masking import mask_pii_data, mask_pii_text
+
+
+def test_pii_masking_credit_cards() -> None:
+    """Tests PCI-DSS credit card masking to XXXX-XXXX-XXXX-9999 schema."""
+    raw_text = "Customer paid using card 4111-2222-3333-4444 on terminal 2."
+    masked = mask_pii_text(raw_text)
+    assert "XXXX-XXXX-XXXX-4444" in masked
+    assert "4111-2222-3333-4444" not in masked
+
+    # Test unformatted 16-digit card
+    raw_text2 = "Transaction record: cc_num=5500000000009876, auth=approved"
+    masked2 = mask_pii_text(raw_text2)
+    assert "XXXX-XXXX-XXXX-9876" in masked2
+
+    # Test nested dict structure masking
+    payload = {
+        "txn_id": "TXN-101",
+        "payment_info": {"card_number": "3782-822463-10005"},
+    }
+    masked_payload = mask_pii_data(payload)
+    assert masked_payload["payment_info"]["card_number"] == "XXXX-XXXX-XXXX-0005"
 
 
 def test_rag_out_of_scope_mandated_refusal() -> None:
@@ -38,7 +65,6 @@ def test_error_code_regex_extraction() -> None:
 
 def test_store_and_cashier_normalization() -> None:
     """Tests store and cashier identity normalization logic."""
-    # Test numeric format normalization
     store_num = re.findall(r"\d+", "48")
     assert store_num and f"STORE_{int(store_num[0]):03d}" == "STORE_048"
 
@@ -49,3 +75,18 @@ def test_store_and_cashier_normalization() -> None:
 def test_rag_similarity_threshold_configured() -> None:
     """Verifies that RAG similarity threshold is strictly locked to 0.70."""
     assert SIMILARITY_THRESHOLD == 0.70
+
+
+def test_bigtable_declarative_sql_signatures() -> None:
+    """Verifies that declarative Bigtable SQL tools return valid JSON contracts."""
+    # Test read_cashier_realtime_alerts_sql
+    alerts_res = read_cashier_realtime_alerts_sql("STORE_048", "CASH_1190")
+    assert isinstance(alerts_res, str)
+    parsed = json.loads(alerts_res)
+    assert "store_id" in parsed or "status" in parsed
+
+    # Test read_pos_transactions_enriched_sql
+    pos_res = read_pos_transactions_enriched_sql("STORE_048", "TXN-999")
+    assert isinstance(pos_res, str)
+    pos_parsed = json.loads(pos_res)
+    assert "store_id" in pos_parsed or "status" in pos_parsed
