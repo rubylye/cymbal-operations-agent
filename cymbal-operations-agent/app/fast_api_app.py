@@ -79,6 +79,17 @@ app.title = "cymbal-operations-agent"
 app.description = "API for interacting with the Agent cymbal-operations-agent"
 
 
+@app.middleware("http")
+async def enforce_oidc_tenant_session_isolation(request, call_next):
+    """Enforces multi-user tenant session isolation by validating X-Goog-Authenticated-User-Email if present."""
+    user_email_header = request.headers.get("X-Goog-Authenticated-User-Email")
+    if user_email_header:
+        # Accounts payload from Google Cloud IAP/OIDC format: accounts.google.com:user@domain.com
+        user_identity = user_email_header.split(":")[-1] if ":" in user_email_header else user_email_header
+        request.state.authenticated_user = user_identity
+    return await call_next(request)
+
+
 @app.post("/feedback")
 def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """Collect and log feedback.

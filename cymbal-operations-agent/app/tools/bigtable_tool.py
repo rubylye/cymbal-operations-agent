@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Cloud Bigtable Real-Time Metrics Tool (read_cashier_realtime_metrics)."""
+"""Cloud Bigtable Real-Time Metrics Tool (read_cashier_realtime_metrics) with MCP Toolbox integration."""
 
 import json
 import os
@@ -21,14 +21,53 @@ import struct
 import time
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
+import google.auth
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
+import requests
 from google.cloud import bigtable
 from google.cloud.bigtable.row_set import RowSet
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
 
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "data-advanced-ruby")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 INSTANCE_ID = os.getenv("BIGTABLE_INSTANCE", "operations-db")
 TABLE_NAME = os.getenv("BIGTABLE_TABLE", "cashier_realtime_alerts")
+BIGTABLE_MCP_URL = os.getenv("BIGTABLE_MCP_URL", "")
+
+
+def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> Optional[str]:
+    """Attempts to query the Cloud Run Bigtable MCP microservice executing declarative SQL/Toolbox queries."""
+    if not BIGTABLE_MCP_URL:
+        return None
+    try:
+        req = Request()
+        token = id_token.fetch_id_token(req, BIGTABLE_MCP_URL)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "name": "read_cashier_realtime_metrics",
+            "arguments": {
+                "store_id": store_id,
+                "cashier_id": cashier_id,
+            },
+        }
+        resp = requests.post(
+            f"{BIGTABLE_MCP_URL.rstrip('/')}/tools/read_cashier_realtime_metrics/invoke",
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, dict) and "result" in data:
+                return str(data["result"])
+            return json.dumps(data, indent=2)
+    except Exception:
+        pass
+    return None
 
 
 def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
@@ -60,6 +99,13 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
         norm_cash = f"CASH_{cash_num[0]}"
     else:
         norm_cash = str(cashier_id).strip()
+
+    # Step 1: Attempt Centralized MCP Microservice Call
+    mcp_result = _query_via_mcp_toolbox(norm_store, norm_cash)
+    if mcp_result:
+        return mcp_result
+
+    # Step 2: Resilient Local SDK Execution
 
     row_prefix = f"{norm_store}#{norm_cash}#"
 

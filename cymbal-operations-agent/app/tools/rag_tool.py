@@ -24,7 +24,7 @@ from google.cloud import bigquery
 # Load local .env first to override any stale shell env vars
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
 
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "data-advanced-ruby")
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 EMBEDDING_TABLE = f"`{PROJECT_ID}.cymbal_gold.pos_manual_chunk_embeddings`"
 EMBEDDING_MODEL = f"`{PROJECT_ID}.cymbal_gold.pos_text_embedding_model`"
 SIMILARITY_THRESHOLD = 0.70
@@ -57,7 +57,11 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
     max_retries = 3
     backoff_factor = 2.0
 
-    # Step 1: Vector similarity search with adjacent context stitching (N-1 to N+1)
+    # Step 0: Extract exact hardware error code tokens for SQL regex boosting
+    err_matches = re.findall(r"(ERR-[A-Za-z0-9\-]+|[A-Z]{3,}-\d{3,}|ERR_\w+)", query, re.IGNORECASE)
+    exact_error_code = err_matches[0].upper() if err_matches else ""
+
+    # Step 1: Hybrid Vector similarity search with regex error code boosting & adjacent context stitching (N-1 to N+1)
     vector_sql = f"""
     WITH matched AS (
       SELECT 
@@ -66,7 +70,12 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         base.document_title,
         base.equipment_covered,
         base.source_pdf_uri,
-        distance
+        base.chunk_content,
+        distance,
+        CASE 
+          WHEN @exact_code != '' AND REGEXP_CONTAINS(UPPER(base.chunk_content), UPPER(@exact_code)) THEN 0.25
+          ELSE 0.0
+        END AS error_code_boost
       FROM VECTOR_SEARCH(
         TABLE {EMBEDDING_TABLE},
         "embedding",
@@ -78,7 +87,7 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
             STRUCT("RETRIEVAL_QUERY" AS task_type)
           )
         ),
-        top_k => 3,
+        top_k => 5,
         distance_type => "COSINE"
       )
     )
@@ -87,21 +96,22 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
       m.document_title,
       m.equipment_covered,
       m.source_pdf_uri,
-      ROUND(1 - m.distance, 4) AS similarity_score,
+      ROUND(LEAST(1.0, (1 - m.distance) + m.error_code_boost), 4) AS similarity_score,
       m.chunk_index,
       STRING_AGG(c.chunk_content, "\\n" ORDER BY c.chunk_index ASC) AS stitched_context
     FROM matched m
     JOIN {EMBEDDING_TABLE} c
       ON m.document_filename = c.document_filename
       AND c.chunk_index BETWEEN (m.chunk_index - 1) AND (m.chunk_index + 1)
-    GROUP BY m.document_filename, m.document_title, m.equipment_covered, m.source_pdf_uri, m.distance, m.chunk_index
+    GROUP BY m.document_filename, m.document_title, m.equipment_covered, m.source_pdf_uri, m.distance, m.error_code_boost, m.chunk_index
     ORDER BY similarity_score DESC
     LIMIT 1
     """
 
     job_config = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter("user_query", "STRING", query)
+            bigquery.ScalarQueryParameter("user_query", "STRING", query),
+            bigquery.ScalarQueryParameter("exact_code", "STRING", exact_error_code),
         ]
     )
 
@@ -185,9 +195,5 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         except Exception as e:
             last_error = str(e)
 
-    # Step 3: Return mandatory certified warning refusal string when similarity score falls below 0.70 threshold or is out of scope
-    return (
-        "⚠️ Warning: No certified standard operating procedure (SOP) or technical runbook could be found "
-        f"with sufficient semantic confidence (similarity score >= {SIMILARITY_THRESHOLD}) for the queried topic: '{query}'. "
-        "The requested topic is out-of-scope for the Cymbal POS terminal hardware documentation repository."
-    )
+    # Step 3: Return exact mandated compliance refusal string when out-of-scope or below threshold
+    return "I cannot find certified warranty or repair rules for this specific error in our technical repository."

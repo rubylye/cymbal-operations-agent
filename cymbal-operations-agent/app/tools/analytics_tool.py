@@ -23,13 +23,17 @@ from google.auth.transport.requests import Request
 from google.adk.tools.data_agent.data_agent_tool import ask_data_agent
 from google.adk.tools.data_agent.config import DataAgentToolConfig
 
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
+DATA_AGENT_ID = os.getenv("BIGQUERY_DATA_AGENT_ID", "")
+
 DATA_AGENT_NAME = os.getenv(
     "BIGQUERY_DATA_AGENT_NAME",
-    "projects/766762791496/locations/global/dataAgents/agent_ff7cb51a-288b-4141-8f0a-de587aad8a05",
+    f"projects/{PROJECT_ID}/locations/{LOCATION}/dataAgents/{DATA_AGENT_ID}" if PROJECT_ID and DATA_AGENT_ID else "",
 )
 BASE_URL = os.getenv(
     "GDA_BASE_URL",
-    "https://geminidataanalytics.googleapis.com/v1beta",
+    f"https://geminidataanalytics.{LOCATION}.rep.googleapis.com/v1beta" if LOCATION not in {"global", ""} else "https://geminidataanalytics.googleapis.com/v1beta",
 )
 
 
