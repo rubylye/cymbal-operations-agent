@@ -14,24 +14,24 @@
 """Unit tests for business logic, data normalization, SQL query construction, and guardrails."""
 
 import re
-from app.tools.rag_tool import pos_troubleshooting_rag_tool, SIMILARITY_THRESHOLD
-from app.tools.bigtable_tool import read_cashier_realtime_metrics
+
+from app.tools.rag_tool import SIMILARITY_THRESHOLD, pos_troubleshooting_rag_tool
 
 
 def test_rag_out_of_scope_mandated_refusal() -> None:
     """Tests that out-of-scope hardware error queries return the exact mandated compliance string."""
     out_of_scope_query = "How do I replace the engine oil on a Ford F-150 truck?"
     result = pos_troubleshooting_rag_tool(out_of_scope_query)
-    expected_refusal = (
-        "I cannot find certified warranty or repair rules for this specific error in our technical repository."
-    )
+    expected_refusal = "I cannot find certified warranty or repair rules for this specific error in our technical repository."
     assert result == expected_refusal, f"Expected exact refusal string, got: {result}"
 
 
 def test_error_code_regex_extraction() -> None:
     """Tests regex error code parser accurately identifies hardware fault codes for query boosting."""
     query = "Cashier is seeing ERR-PAY-4001 EMV contactless payment freeze on lane 4"
-    err_matches = re.findall(r"(ERR-[A-Za-z0-9\-]+|[A-Z]{3,}-\d{3,}|ERR_\w+)", query, re.IGNORECASE)
+    err_matches = re.findall(
+        r"(ERR-[A-Za-z0-9\-]+|[A-Z]{3,}-\d{3,}|ERR_\w+)", query, re.IGNORECASE
+    )
     assert len(err_matches) > 0
     assert err_matches[0].upper() == "ERR-PAY-4001"
 

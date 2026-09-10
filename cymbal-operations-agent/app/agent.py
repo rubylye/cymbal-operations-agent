@@ -15,18 +15,21 @@
 """Cymbal Operations ADK Coordinator Agent (cymbal_operations_agent)."""
 
 import os
+
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
 from google.genai import types
 
-# Load local environment configuration
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
-
 from app.tools.analytics_tool import cymbal_analytics_tool
-from app.tools.rag_tool import pos_troubleshooting_rag_tool
 from app.tools.bigtable_tool import read_cashier_realtime_metrics
+from app.tools.rag_tool import pos_troubleshooting_rag_tool
+
+# Load local environment configuration
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=True
+)
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 

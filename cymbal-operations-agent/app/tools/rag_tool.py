@@ -17,12 +17,15 @@
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+
 from dotenv import load_dotenv
 from google.cloud import bigquery
 
 # Load local .env first to override any stale shell env vars
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+    override=True,
+)
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 EMBEDDING_TABLE = f"`{PROJECT_ID}.cymbal_gold.pos_manual_chunk_embeddings`"
@@ -58,13 +61,15 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
     backoff_factor = 2.0
 
     # Step 0: Extract exact hardware error code tokens for SQL regex boosting
-    err_matches = re.findall(r"(ERR-[A-Za-z0-9\-]+|[A-Z]{3,}-\d{3,}|ERR_\w+)", query, re.IGNORECASE)
+    err_matches = re.findall(
+        r"(ERR-[A-Za-z0-9\-]+|[A-Z]{3,}-\d{3,}|ERR_\w+)", query, re.IGNORECASE
+    )
     exact_error_code = err_matches[0].upper() if err_matches else ""
 
     # Step 1: Hybrid Vector similarity search with regex error code boosting & adjacent context stitching (N-1 to N+1)
     vector_sql = f"""
     WITH matched AS (
-      SELECT 
+      SELECT
         base.chunk_index,
         base.document_filename,
         base.document_title,
@@ -72,7 +77,7 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         base.source_pdf_uri,
         base.chunk_content,
         distance,
-        CASE 
+        CASE
           WHEN @exact_code != '' AND REGEXP_CONTAINS(UPPER(base.chunk_content), UPPER(@exact_code)) THEN 0.25
           ELSE 0.0
         END AS error_code_boost
@@ -91,7 +96,7 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         distance_type => "COSINE"
       )
     )
-    SELECT 
+    SELECT
       m.document_filename,
       m.document_title,
       m.equipment_covered,
@@ -115,7 +120,6 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         ]
     )
 
-    last_error = None
     for attempt in range(1, max_retries + 1):
         try:
             job = client.query(vector_sql, job_config=job_config)
@@ -137,19 +141,37 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
                     )
             # If no rows or score below threshold, fall through to Step 2
             break
-        except Exception as e:
-            last_error = str(e)
+        except Exception:
             if attempt < max_retries:
-                time.sleep(backoff_factor ** attempt)
+                time.sleep(backoff_factor**attempt)
 
     # Step 2: Fallback to full-text SEARCH if vector similarity is below threshold or query fails
     tokens = re.findall(r"[A-Za-z0-9]+", query)
-    error_tokens = [t for t in tokens if len(t) >= 3 and (any(c.isdigit() for c in t) or t.upper() in {"ERR", "POS", "EMV", "PINPAD", "DRAWER", "SCANNER", "BEAM", "FEED", "CUTTER"})]
+    error_tokens = [
+        t
+        for t in tokens
+        if len(t) >= 3
+        and (
+            any(c.isdigit() for c in t)
+            or t.upper()
+            in {
+                "ERR",
+                "POS",
+                "EMV",
+                "PINPAD",
+                "DRAWER",
+                "SCANNER",
+                "BEAM",
+                "FEED",
+                "CUTTER",
+            }
+        )
+    ]
     if error_tokens:
         search_term = " ".join(error_tokens[:3])
         fallback_sql = f"""
         WITH text_matches AS (
-          SELECT 
+          SELECT
             chunk_index,
             document_filename,
             document_title,
@@ -160,7 +182,7 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
           ORDER BY chunk_index DESC
           LIMIT 1
         )
-        SELECT 
+        SELECT
           m.document_filename,
           m.document_title,
           m.equipment_covered,
@@ -192,8 +214,8 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
                     f"#### Procedural Runbook & Recovery Protocol:\n"
                     f"{f_row.stitched_context}"
                 )
-        except Exception as e:
-            last_error = str(e)
+        except Exception:
+            pass
 
     # Step 3: Return exact mandated compliance refusal string when out-of-scope or below threshold
     return "I cannot find certified warranty or repair rules for this specific error in our technical repository."

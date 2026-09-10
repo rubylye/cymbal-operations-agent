@@ -19,16 +19,19 @@ import os
 import re
 import struct
 import time
-from typing import Any, Dict, Optional
-from dotenv import load_dotenv
-import google.auth
-from google.auth.transport.requests import Request
-from google.oauth2 import id_token
+from typing import Any
+
 import requests
+from dotenv import load_dotenv
+from google.auth.transport.requests import Request
 from google.cloud import bigtable
 from google.cloud.bigtable.row_set import RowSet
+from google.oauth2 import id_token
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+    override=True,
+)
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 INSTANCE_ID = os.getenv("BIGTABLE_INSTANCE", "operations-db")
@@ -36,7 +39,7 @@ TABLE_NAME = os.getenv("BIGTABLE_TABLE", "cashier_realtime_alerts")
 BIGTABLE_MCP_URL = os.getenv("BIGTABLE_MCP_URL", "")
 
 
-def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> Optional[str]:
+def _query_via_mcp_toolbox(store_id: str, cashier_id: str) -> str | None:
     """Attempts to query the Cloud Run Bigtable MCP microservice executing declarative SQL/Toolbox queries."""
     if not BIGTABLE_MCP_URL:
         return None
@@ -122,7 +125,7 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
             row_set = RowSet()
             row_set.add_row_range_from_keys(
                 start_key=row_prefix.encode("utf-8"),
-                end_key=(f"{norm_store}#{norm_cash}$\xff").encode("utf-8"),
+                end_key=(f"{norm_store}#{norm_cash}$\xff").encode(),
             )
 
             rows = list(table.read_rows(row_set=row_set, limit=1))
@@ -134,17 +137,17 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
 
             latest_row = rows[0]
             row_key_str = latest_row.row_key.decode("utf-8")
-            metrics: Dict[str, Any] = {
+            metrics: dict[str, Any] = {
                 "store_id": norm_store,
                 "cashier_id": norm_cash,
                 "latest_row_key": row_key_str,
             }
 
-            for cf, cols in latest_row.cells.items():
+            for _cf, cols in latest_row.cells.items():
                 for col_name_b, cell_list in cols.items():
                     col_name = col_name_b.decode("utf-8")
                     val_bytes = cell_list[0].value
-                    
+
                     # Decode int64 Bigtable counter fields
                     if len(val_bytes) == 8 and col_name in {
                         "cashier_1h_manual_override_count",
@@ -192,6 +195,6 @@ def read_cashier_realtime_metrics(store_id: str, cashier_id: str) -> str:
         except Exception as e:
             last_error = str(e)
             if attempt < max_retries:
-                time.sleep(backoff_factor ** attempt)
+                time.sleep(backoff_factor**attempt)
 
     return f"Cloud Bigtable telemetry service unreachable. Error details: {last_error}"

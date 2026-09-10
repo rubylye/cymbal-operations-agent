@@ -17,11 +17,11 @@
 import json
 import os
 import time
-from typing import Any, Dict
+
 import google.auth
-from google.auth.transport.requests import Request
-from google.adk.tools.data_agent.data_agent_tool import ask_data_agent
 from google.adk.tools.data_agent.config import DataAgentToolConfig
+from google.adk.tools.data_agent.data_agent_tool import ask_data_agent
+from google.auth.transport.requests import Request
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", ""))
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
@@ -29,11 +29,15 @@ DATA_AGENT_ID = os.getenv("BIGQUERY_DATA_AGENT_ID", "")
 
 DATA_AGENT_NAME = os.getenv(
     "BIGQUERY_DATA_AGENT_NAME",
-    f"projects/{PROJECT_ID}/locations/{LOCATION}/dataAgents/{DATA_AGENT_ID}" if PROJECT_ID and DATA_AGENT_ID else "",
+    f"projects/{PROJECT_ID}/locations/{LOCATION}/dataAgents/{DATA_AGENT_ID}"
+    if PROJECT_ID and DATA_AGENT_ID
+    else "",
 )
 BASE_URL = os.getenv(
     "GDA_BASE_URL",
-    f"https://geminidataanalytics.{LOCATION}.rep.googleapis.com/v1beta" if LOCATION not in {"global", ""} else "https://geminidataanalytics.googleapis.com/v1beta",
+    f"https://geminidataanalytics.{LOCATION}.rep.googleapis.com/v1beta"
+    if LOCATION not in {"global", ""}
+    else "https://geminidataanalytics.googleapis.com/v1beta",
 )
 
 
@@ -92,7 +96,11 @@ def cymbal_analytics_tool(query: str) -> str:
 
                     data_obj = item.get("data", {})
                     if "matchedQuery" in data_obj:
-                        generated_sql = data_obj["matchedQuery"].get("exampleQuery", {}).get("sqlQuery")
+                        generated_sql = (
+                            data_obj["matchedQuery"]
+                            .get("exampleQuery", {})
+                            .get("sqlQuery")
+                        )
                     elif "query" in data_obj and not generated_sql:
                         generated_sql = data_obj["query"].get("generatedSql")
 
@@ -101,7 +109,9 @@ def cymbal_analytics_tool(query: str) -> str:
                         headers = retrieved.get("headers", [])
                         rows = retrieved.get("rows", [])
                         if headers and rows:
-                            data_results = [dict(zip(headers, row)) for row in rows]
+                            data_results = [
+                                dict(zip(headers, row, strict=False)) for row in rows
+                            ]
                     elif "result" in data_obj:
                         data_results = data_obj["result"].get("data")
 
@@ -125,6 +135,8 @@ def cymbal_analytics_tool(query: str) -> str:
             last_error = str(e)
 
         if attempt < max_retries:
-            time.sleep(backoff_factor ** attempt)
+            time.sleep(backoff_factor**attempt)
 
-    return f"Store analytical data is temporarily unreachable. Error details: {last_error}"
+    return (
+        f"Store analytical data is temporarily unreachable. Error details: {last_error}"
+    )

@@ -85,7 +85,11 @@ async def enforce_oidc_tenant_session_isolation(request, call_next):
     user_email_header = request.headers.get("X-Goog-Authenticated-User-Email")
     if user_email_header:
         # Accounts payload from Google Cloud IAP/OIDC format: accounts.google.com:user@domain.com
-        user_identity = user_email_header.split(":")[-1] if ":" in user_email_header else user_email_header
+        user_identity = (
+            user_email_header.split(":")[-1]
+            if ":" in user_email_header
+            else user_email_header
+        )
         request.state.authenticated_user = user_identity
     return await call_next(request)
 
