@@ -27,7 +27,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", "..", ".en
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "data-advanced-ruby")
 EMBEDDING_TABLE = f"`{PROJECT_ID}.cymbal_gold.pos_manual_chunk_embeddings`"
 EMBEDDING_MODEL = f"`{PROJECT_ID}.cymbal_gold.pos_text_embedding_model`"
-SIMILARITY_THRESHOLD = 0.60
+SIMILARITY_THRESHOLD = 0.70
 
 
 def _gcs_to_https(uri: str) -> str:
@@ -185,9 +185,9 @@ def pos_troubleshooting_rag_tool(query: str) -> str:
         except Exception as e:
             last_error = str(e)
 
-    # Step 3: Return certified warning string when out of scope or similarity score falls below threshold
+    # Step 3: Return mandatory certified warning refusal string when similarity score falls below 0.70 threshold or is out of scope
     return (
         "⚠️ Warning: No certified standard operating procedure (SOP) or technical runbook could be found "
-        f"with sufficient semantic confidence for the queried topic: '{query}'. "
-        "The requested topic may be out-of-scope for the Cymbal POS terminal hardware documentation repository."
+        f"with sufficient semantic confidence (similarity score >= {SIMILARITY_THRESHOLD}) for the queried topic: '{query}'. "
+        "The requested topic is out-of-scope for the Cymbal POS terminal hardware documentation repository."
     )

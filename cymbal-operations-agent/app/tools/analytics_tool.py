@@ -20,7 +20,8 @@ import time
 from typing import Any, Dict
 import google.auth
 from google.auth.transport.requests import Request
-import requests
+from google.adk.tools.data_agent.data_agent_tool import ask_data_agent
+from google.adk.tools.data_agent.config import DataAgentToolConfig
 
 DATA_AGENT_NAME = os.getenv(
     "BIGQUERY_DATA_AGENT_NAME",
@@ -58,63 +59,64 @@ def cymbal_analytics_tool(query: str) -> str:
     )
     auth_req = Request()
 
-    parent = DATA_AGENT_NAME.rsplit("/", 2)[0]
-    chat_url = f"{BASE_URL}/{parent}:chat"
-
-    payload = {
-        "messages": [{"userMessage": {"text": query}}],
-        "dataAgentContext": {
-            "dataAgent": DATA_AGENT_NAME,
-        },
-        "clientIdEnum": "GOOGLE_ADK",
-    }
-
     max_retries = 3
     backoff_factor = 2.0
     last_error = None
+    settings = DataAgentToolConfig()
 
     for attempt in range(1, max_retries + 1):
         try:
             credentials.refresh(auth_req)
-            headers = {
-                "Authorization": f"Bearer {credentials.token}",
-                "Content-Type": "application/json",
-            }
-            resp = requests.post(chat_url, headers=headers, json=payload, timeout=90)
-            if resp.status_code == 200:
-                response_json = resp.json()
+            result = ask_data_agent(
+                data_agent_name=DATA_AGENT_NAME,
+                query=query,
+                credentials=credentials,
+                settings=settings,
+                tool_context=None,
+            )
+
+            if result.get("status") == "SUCCESS":
+                response_steps = result.get("response", [])
                 final_parts = []
                 generated_sql = None
                 data_results = None
 
-                for item in response_json:
-                    sys_msg = item.get("systemMessage", {})
-                    text_obj = sys_msg.get("text", {})
+                for item in response_steps:
+                    text_obj = item.get("text", {})
                     if text_obj.get("textType") == "FINAL_RESPONSE":
                         final_parts.extend(text_obj.get("parts", []))
 
-                    data_obj = sys_msg.get("data", {})
+                    data_obj = item.get("data", {})
                     if "matchedQuery" in data_obj:
                         generated_sql = data_obj["matchedQuery"].get("exampleQuery", {}).get("sqlQuery")
                     elif "query" in data_obj and not generated_sql:
                         generated_sql = data_obj["query"].get("generatedSql")
 
-                    if "result" in data_obj:
+                    if "Data Retrieved" in item:
+                        retrieved = item["Data Retrieved"]
+                        headers = retrieved.get("headers", [])
+                        rows = retrieved.get("rows", [])
+                        if headers and rows:
+                            data_results = [dict(zip(headers, row)) for row in rows]
+                    elif "result" in data_obj:
                         data_results = data_obj["result"].get("data")
 
                 output = []
                 if final_parts:
                     output.append("\n".join(final_parts))
                 if data_results:
-                    output.append(f"\nData Results ({len(data_results)} records):\n" + json.dumps(data_results[:20], indent=2))
+                    output.append(
+                        f"\nData Results ({len(data_results)} records):\n"
+                        + json.dumps(data_results[:20], indent=2)
+                    )
                 if generated_sql:
                     output.append(f"\nGenerated SQL Query:\n{generated_sql}")
 
                 if output:
                     return "\n\n".join(output)
-                return json.dumps(response_json, indent=2)
+                return json.dumps(response_steps, indent=2)
 
-            last_error = f"HTTP {resp.status_code}: {resp.text}"
+            last_error = result.get("error_details", json.dumps(result))
         except Exception as e:
             last_error = str(e)
 
