@@ -20,6 +20,9 @@ from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
+from google.adk.plugins.bigquery_agent_analytics_plugin import (
+    BigQueryAgentAnalyticsPlugin,
+)
 from google.genai import types
 
 from app.tools.analytics_tool import cymbal_analytics_tool
@@ -35,6 +38,8 @@ load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=True
 )
 
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", os.getenv("PROJECT_ID", "data-advanced-ruby"))
+BQ_TELEMETRY_DATASET = os.getenv("BQ_TELEMETRY_DATASET", "agent_telemetry")
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 COORDINATOR_INSTRUCTIONS = """You are the Cymbal Operations Coordinator Agent (cymbal_operations_agent), an enterprise AI operations assistant for store leads, regional managers, and loss-prevention auditors across Cymbal's global retail network.
@@ -105,7 +110,13 @@ root_agent = Agent(
     ],
 )
 
+bq_telemetry_plugin = BigQueryAgentAnalyticsPlugin(
+    project_id=PROJECT_ID,
+    dataset_id=BQ_TELEMETRY_DATASET,
+)
+
 app = App(
     root_agent=root_agent,
     name="app",
+    plugins=[bq_telemetry_plugin],
 )
