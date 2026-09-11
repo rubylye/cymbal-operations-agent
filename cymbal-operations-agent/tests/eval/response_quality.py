@@ -30,9 +30,13 @@ def evaluate(instance):
         prompt += f"Expected Answer (ground truth): {reference}\n"
     prompt += f"Full Agent Trace: {instance.get('agent_data', '')}\n"
 
-    client = genai.Client()  # AI Studio (GEMINI_API_KEY) or Agent Platform (ADC)
+    import os
+    project_id = "data-advanced-ruby"
+    location = os.getenv("EVAL_LOCATION", "us-central1")
+    model = os.getenv("EVAL_MODEL", "gemini-2.5-flash")
+    client = genai.Client(vertexai=True, project=project_id, location=location)
     response = client.models.generate_content(
-        model="gemini-3.6-flash",
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0,  # deterministic grading
