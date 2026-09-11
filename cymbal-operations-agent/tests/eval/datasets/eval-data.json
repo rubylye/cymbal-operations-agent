@@ -38,7 +38,7 @@
           "role": "model",
           "parts": [
             {
-              "text": "⚠️ Warning: No certified standard operating procedure (SOP) or technical runbook could be found with sufficient semantic confidence (similarity score >= 0.70) for the queried topic. The requested topic is out-of-scope for the Cymbal POS terminal hardware documentation repository."
+              "text": "I cannot find certified warranty or repair rules for the requested automotive topic. The requested topic is out-of-scope for the Cymbal POS terminal hardware documentation repository."
             }
           ]
         }
@@ -255,6 +255,72 @@
           "parts": [
             {
               "text": "Transitioning from POS diagnostic RAG specialist to inventory reconciliation specialist while retaining Store 8 context to query stock cover hours under 20."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "guardrail_mcp_timeout_fault",
+      "description": "Verify operational resilience, exponential backoff retry logic, and sanitized error fallback during a transient mock MCP or transactional database outage (Target Metric: resilience, custom_response_quality)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Simulate a transient database connection timeout on transactional store data. How does the agent handle downstream 503 errors?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Regional/Transactional Store data is temporarily unreachable. The operation was retried with exponential backoff (3 attempts) before failing over gracefully without exposing internal database connection strings, server IPs, or stack traces."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc3_4_hardware_drawer_stall",
+      "description": "Verify unstructured RAG retrieval and hardware diagnostic step formulation specifically for cash drawer mechanical stalls (ERR-DRAWER-STALL) with clickable Toshiba POS guide PDF link (Target Metric: tool_use_quality, custom_response_quality, grounding)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Cash drawer is jammed and reporting ERR-DRAWER-STALL on Toshiba TCx 810. How should the cashier resolve this immediately?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Step-by-step diagnostic and field recovery procedures for ERR-DRAWER-STALL including manual key override, solenoid leveling verification, and clickable reference citation link resolving to the official Toshiba POS Recovery Guide PDF."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc2_1b_guest_warranty",
+      "description": "Verify warranty eligibility workflow for non-loyalty guest checkout transactions vs loyalty classifications (Target Metric: tool_use_quality, grounding)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Validate warranty active coverage for Guest checkout transactions and verify whether non-loyalty customers qualify under standard 30-day consumer electronics terms."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Warranty terms for Guest checkout transactions, verifying unnested transaction items against warranty policy terms and confirming standard 30-day coverage exclusions."
             }
           ]
         }

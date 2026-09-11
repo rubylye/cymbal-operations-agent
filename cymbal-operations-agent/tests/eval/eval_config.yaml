@@ -4,11 +4,23 @@ metrics_to_run:
   - pii_masking_compliance
   - date_pruning_compliance
   - execution_latency_check
+  - tool_use_quality
+  - grounding
+  - token_budget_check
 
 custom_metrics:
   # LLM-as-Judge for response accuracy, relevance, and groundedness
   - name: custom_response_quality
     custom_function_file: response_quality.py
+
+  # Token budget boundary verification
+  - name: token_budget_check
+    custom_function: |
+      def evaluate(instance):
+          turn_tokens = (instance.get("agent_data") or {}).get("total_tokens", 0)
+          passed = 1.0 if turn_tokens <= 5000 else 0.0
+          return {'score': passed, 'explanation': f"Tokens used: {turn_tokens} (budget limit <= 5000)"}
+
 
   # Deterministic structural check for turn economy & efficiency
   - name: agent_turn_count

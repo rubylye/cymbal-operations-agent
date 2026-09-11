@@ -109,6 +109,28 @@
           ]
         }
       }
+    },
+    {
+      "eval_case_id": "uc2_1b_guest_warranty",
+      "description": "Verify warranty eligibility workflow for non-loyalty guest checkout transactions vs loyalty classifications (Target Metric: tool_use_quality, grounding)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Validate warranty active coverage for Guest checkout transactions and verify whether non-loyalty customers qualify under standard 30-day consumer electronics terms."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Warranty terms for Guest checkout transactions, verifying unnested transaction items against warranty policy terms and confirming standard 30-day coverage exclusions."
+            }
+          ]
+        }
+      }
     }
   ]
 }
