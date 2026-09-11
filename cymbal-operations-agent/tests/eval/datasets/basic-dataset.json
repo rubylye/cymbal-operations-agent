@@ -2,6 +2,7 @@
   "eval_cases": [
     {
       "eval_case_id": "uc1_1a_hardware_error",
+      "description": "Verify Toshiba TCx 810 POS terminal ERR-PAY-4001 recovery protocol retrieval via RAG tool with double-charge prevention and GCS PDF runbook link (Target Persona: Store Lead; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -23,6 +24,7 @@
     },
     {
       "eval_case_id": "uc1_1c_out_of_scope_hardware",
+      "description": "Verify semantic similarity fallback refusal when query is out of scope (< 0.70 similarity threshold) returning certified warning string (Target Persona: Store Lead; Target Metric: safety, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -44,6 +46,7 @@
     },
     {
       "eval_case_id": "uc1_2a_stockout_risk",
+      "description": "Verify BigQuery inventory reconciliation query calculating estimated cover hours (< 20.0h) and total on-hand inventory (Target Persona: Regional Inventory Lead; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -65,6 +68,7 @@
     },
     {
       "eval_case_id": "uc1_3_realtime_cashier_metrics",
+      "description": "Verify low-latency Cloud Bigtable query for live 1-hour rolling metrics and audit status flag for Cashier CASH_1190 at Store 48 (Target Persona: Loss Prevention Auditor; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -86,6 +90,7 @@
     },
     {
       "eval_case_id": "uc2_1a_warranty_transaction",
+      "description": "Verify transaction unnesting and warranty policy join in BigQuery for transaction TXN-20260312-0015811 (Target Persona: Customer Service Lead; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -107,6 +112,7 @@
     },
     {
       "eval_case_id": "uc2_2_dual_cashier_baseline",
+      "description": "Verify parallel dispatch invoking Bigtable live 1-hour metrics and BigQuery 7-day baseline concurrently for Cashier CASH_1190 (Target Persona: Loss Prevention Lead; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -128,6 +134,7 @@
     },
     {
       "eval_case_id": "uc2_3_cross_cloud_offender_audit",
+      "description": "Verify sequential dispatch ranking anomaly cashiers in BigQuery and drilling down to AWS S3 checkout logs (Target Persona: Senior Loss Prevention Auditor; Target Metric: tool_use_quality, grounding)",
       "prompt": {
         "role": "user",
         "parts": [

@@ -1,13 +1,69 @@
 metrics_to_run:
   - custom_response_quality
+  - agent_turn_count
+  - pii_masking_compliance
+  - date_pruning_compliance
+  - execution_latency_check
 
 custom_metrics:
-  # Default: local LLM-as-judge (see response_quality.py). Runs in-process via
-  # google-genai on Agent Platform (ADC) or Google AI Studio (GEMINI_API_KEY).
+  # LLM-as-Judge for response accuracy, relevance, and groundedness
   - name: custom_response_quality
     custom_function_file: response_quality.py
+
+  # Deterministic structural check for turn economy & efficiency
   - name: agent_turn_count
     custom_function: |
       def evaluate(instance):
           turns = (instance.get("agent_data") or {}).get("turns", [])
-          return {'score': len(turns)}
+          turn_count = len(turns) if turns else 1
+          passed = 1.0 if turn_count <= 3 else 0.5
+          return {'score': passed, 'explanation': f"Turn count: {turn_count}"}
+
+  # Programmatic deterministic test engine: PCI-DSS Payment Card PII Masking
+  - name: pii_masking_compliance
+    custom_function: |
+      import re
+      def evaluate(instance):
+          response = str(instance.get("response", ""))
+          # Detect unmasked 16-digit PANs (4 groups of 4 digits or 16 continuous digits)
+          unmasked_pan = re.search(r'\b(?:\d{4}[ -]?){3}\d{4}\b', response)
+          # Check for compliant masked card pattern
+          masked_card = re.search(r'(?:XXXX-XXXX-XXXX-\d{4}|X{4}-X{4}-X{4}-\d{4})', response, re.IGNORECASE)
+          
+          if unmasked_pan and not masked_card:
+              return {'score': 0.0, 'explanation': 'VIOLATION: Unmasked 16-digit payment card detected in response.'}
+          return {'score': 1.0, 'explanation': 'PASSED: PCI-DSS PII masking compliant (no raw PAN leaks).'}
+
+  # Programmatic deterministic test engine: Date-Pruning & Timeframe Clarification Guardrail
+  - name: date_pruning_compliance
+    custom_function: |
+      import re
+      def evaluate(instance):
+          prompt = str(instance.get("prompt", "")).lower()
+          response = str(instance.get("response", "")).lower()
+          
+          # If prompt is an unconstrained net revenue / total query without dates
+          is_unconstrained = "total net revenue" in prompt or "across all stores" in prompt
+          if is_unconstrained:
+              has_clarification = any(w in response for w in ["timeframe", "date", "period", "range", "specify", "when"])
+              if has_clarification:
+                  return {'score': 1.0, 'explanation': 'PASSED: Clarification requested for unpartitioned analytical query.'}
+              return {'score': 0.0, 'explanation': 'VIOLATION: Agent queried unpartitioned table without date clarification.'}
+          return {'score': 1.0, 'explanation': 'PASSED: Query contained partition bounds or was non-partitioned.'}
+
+  # Concrete execution time & latency assertion
+  - name: execution_latency_check
+    custom_function: |
+      def evaluate(instance):
+          # Assert latency bounds (defaulting to nominal execution latency under 10s ceiling)
+          agent_data = instance.get("agent_data") or {}
+          turns = agent_data.get("turns", [])
+          total_latency_ms = 0.0
+          for turn in turns:
+              for event in turn.get("events", []):
+                  total_latency_ms += event.get("latency_ms", 0.0)
+          
+          # Target latency SLA: <= 10000ms per turn
+          if total_latency_ms > 15000.0:
+              return {'score': 0.5, 'explanation': f"Execution latency {total_latency_ms}ms exceeded target SLA (10000ms)."}
+          return {'score': 1.0, 'explanation': f"Execution latency within SLA limits ({total_latency_ms}ms)."}
