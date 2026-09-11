@@ -2,6 +2,7 @@
   "eval_cases": [
     {
       "eval_case_id": "uc1_1a_hardware_error",
+      "description": "Verify Toshiba TCx 810 POS terminal ERR-PAY-4001 recovery protocol retrieval via RAG tool with double-charge prevention and GCS PDF runbook link (Target Persona: Store Lead; Target Metric: tool_use_quality, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -23,6 +24,7 @@
     },
     {
       "eval_case_id": "uc1_1c_out_of_scope_hardware",
+      "description": "Verify semantic similarity fallback refusal when query is out of scope (< 0.70 similarity threshold) returning certified warning string (Target Persona: Store Lead; Target Metric: safety, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -44,6 +46,7 @@
     },
     {
       "eval_case_id": "uc1_2a_stockout_risk",
+      "description": "Verify BigQuery inventory reconciliation query calculating estimated cover hours (< 20.0h) and total on-hand inventory (Target Persona: Regional Inventory Lead; Target Metric: tool_use_quality, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -64,7 +67,30 @@
       }
     },
     {
+      "eval_case_id": "uc1_2b_net_revenue_calc",
+      "description": "Verify functional SQL execution for Net Transaction Revenue on Store 8 today applying business glossary formula (subtotal_amount - discount + tax_amount) over pos_transactions_gold without triggering unconstrained partition safeguards (Target Persona: Regional Sales Lead; Target Metric: tool_use_quality, custom_response_quality)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the Net Transaction Revenue for Store 8 today?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Execute GoogleSQL query over pos_transactions_gold applying Business Glossary math formula: subtotal_amount - discount + tax_amount filtering for specified Store 8 on today's business_date partition."
+            }
+          ]
+        }
+      }
+    },
+    {
       "eval_case_id": "uc1_3_realtime_cashier_metrics",
+      "description": "Verify low-latency Cloud Bigtable query for live 1-hour rolling metrics and audit status flag for Cashier CASH_1190 at Store 48 (Target Persona: Loss Prevention Auditor; Target Metric: tool_use_quality, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -86,6 +112,7 @@
     },
     {
       "eval_case_id": "uc2_1a_warranty_transaction",
+      "description": "Verify transaction unnesting and warranty policy join in BigQuery for transaction TXN-20260312-0015811 (Target Persona: Customer Service Lead; Target Metric: tool_use_quality, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -107,6 +134,7 @@
     },
     {
       "eval_case_id": "uc2_2_dual_cashier_baseline",
+      "description": "Verify parallel dispatch invoking Bigtable live 1-hour metrics and BigQuery 7-day baseline concurrently for Cashier CASH_1190 (Target Persona: Loss Prevention Lead; Target Metric: multi_turn_tool_use_quality, custom_response_quality)",
       "prompt": {
         "role": "user",
         "parts": [
@@ -127,12 +155,44 @@
       }
     },
     {
-      "eval_case_id": "uc2_3_cross_cloud_offender_audit",
+      "eval_case_id": "uc2_3_multi_turn_trace",
+      "description": "UC-2.3 multi-turn cashier promo override audit tracking across sequential turns with context retention and state persistence (Target Persona: Senior Auditor; Target Metric: multi_turn_task_success, multi_turn_trajectory_quality)",
       "prompt": {
         "role": "user",
         "parts": [
           {
-            "text": "Show cashiers with active cashier promo abuse alerts in the last 7 days and retrieve checkout logs for the top offender."
+            "text": "Show cashier logs for the last 3 days."
+          }
+        ]
+      },
+      "agent_data": {
+        "turns": [
+          {
+            "turn_index": 0,
+            "events": [
+              {
+                "author": "user",
+                "content": {
+                  "role": "user",
+                  "parts": [
+                    {
+                      "text": "Who is the top offender for promo abuse in the last 7 days?"
+                    }
+                  ]
+                }
+              },
+              {
+                "author": "agent",
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "The top offender for cashier promo abuse alerts in the last 7 days is Cashier CASH_1164 at Store 8 with 14 active promo abuse flags."
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -141,7 +201,60 @@
           "role": "model",
           "parts": [
             {
-              "text": "Ranked cashier promo abuse offenders from pos_anomaly_alerts and federated AWS S3 silver_pos_transactions logs for the top offending cashier."
+              "text": "Combining cashier context CASH_1164 with 3-day transaction history to retrieve detailed checkout logs."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc_multi_turn_intent_switch",
+      "description": "Verify mid-session routing intent switching from POS hardware RAG diagnostic to store stockout analytics while maintaining Store 8 context across turns (Target Persona: Store Lead; Target Metric: multi_turn_task_success, multi_turn_trajectory_quality)",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Also check if we have any items with less than 20 hours stock cover at Store 8."
+          }
+        ]
+      },
+      "agent_data": {
+        "turns": [
+          {
+            "turn_index": 0,
+            "events": [
+              {
+                "author": "user",
+                "content": {
+                  "role": "user",
+                  "parts": [
+                    {
+                      "text": "How do I resolve ERR-PAY-4001 on the payment terminal at Store 8?"
+                    }
+                  ]
+                }
+              },
+              {
+                "author": "agent",
+                "content": {
+                  "role": "model",
+                  "parts": [
+                    {
+                      "text": "For ERR-PAY-4001 at Store 8, perform the EMV recovery protocol by clearing transaction state and verifying terminal payment status."
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Transitioning from POS diagnostic RAG specialist to inventory reconciliation specialist while retaining Store 8 context to query stock cover hours under 20."
             }
           ]
         }
