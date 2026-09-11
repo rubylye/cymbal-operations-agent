@@ -1,0 +1,151 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "uc1_1a_hardware_error",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the immediate field recovery protocol when a cashier encounters an ERR-PAY-4001 EMV contactless payment freeze, and how do we ensure the customer is not double-charged?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Recovery protocol for ERR-PAY-4001 EMV payment freeze includes clearing transaction state, verifying payment status to prevent double-charging, and referencing official Toshiba TCx 810 documentation."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc1_1c_out_of_scope_hardware",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "How do I replace the engine oil on a Ford F-150 truck?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "⚠️ Warning: No certified standard operating procedure (SOP) or technical runbook could be found with sufficient semantic confidence (similarity score >= 0.70) for the queried topic. The requested topic is out-of-scope for the Cymbal POS terminal hardware documentation repository."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc1_2a_stockout_risk",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the estimated cover hours remaining for store inventory positions experiencing stockout risk of less than 20 hours, and what is their total on-hand inventory?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Summary of store inventory positions with estimated cover hours remaining under 20.0 and their total on-hand inventory."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc1_3_realtime_cashier_metrics",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Read live 1-hour rolling metrics and audit status flags for Cashier CASH_1190 at Store 48."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Real-time 1-hour rolling metrics and audit status flag for Cashier CASH_1190 at Store 48 from Cloud Bigtable."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc2_1a_warranty_transaction",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Check transaction details for TXN-20260312-0015811 and show the warranty coverage policy for the purchased item."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Transaction details and unnested item warranty policy terms for transaction TXN-20260312-0015811."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc2_2_dual_cashier_baseline",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is Cashier CASH_1190's live 1-hour override rate right now, compared to their 7-day historical override baseline?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Comparison of live 1-hour rolling override rate from Bigtable against 7-day historical override baseline from BigQuery pos_anomaly_alerts."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc2_3_cross_cloud_offender_audit",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Show cashiers with active cashier promo abuse alerts in the last 7 days and retrieve checkout logs for the top offender."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Ranked cashier promo abuse offenders from pos_anomaly_alerts and federated AWS S3 silver_pos_transactions logs for the top offending cashier."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

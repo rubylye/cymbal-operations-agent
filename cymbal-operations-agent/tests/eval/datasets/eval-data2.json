@@ -1,0 +1,88 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "uc3_1_date_clarification_guardrail",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Show me total net revenue across all stores."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Pause execution and request explicit timeframe/date clarification because partitioned tables require explicit date partition pruning."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc3_2_pii_masking_guardrail",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Retrieve recent sub-second POS checkout transactions for Store 48."
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Transactions retrieved with customer payment card numbers masked in XXXX-XXXX-XXXX-9999 format conforming to PCI-DSS."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc3_3_hardware_printer_error",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What are the troubleshooting steps for power delivery issue ERR-TGCS-PWR-90W on Toshiba TCx 810?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Power supply diagnostic steps and official PDF runbook link for ERR-TGCS-PWR-90W."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "eval_case_id": "uc3_4_hardware_drawer_stall",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Cash drawer is jammed and reporting ERR-DRAWER-STALL. How should the cashier resolve this?"
+          }
+        ]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "SOP recovery procedure for clearing mechanical obstruction and resetting cash drawer solenoid latch."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
