@@ -27,6 +27,7 @@ from starlette.responses import Response, StreamingResponse
 
 from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
+from app.app_utils.reasoning_engine_adapter import attach_reasoning_engine_routes
 from app.app_utils.typing import Feedback
 from app.utils.pii_masking import mask_pii_text
 
@@ -79,6 +80,8 @@ app: FastAPI = get_fast_api_app(
 )
 app.title = "cymbal-operations-agent"
 app.description = "API for interacting with the Agent cymbal-operations-agent"
+
+attach_reasoning_engine_routes(app)
 
 
 @app.middleware("http")
